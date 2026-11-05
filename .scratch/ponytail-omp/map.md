@@ -28,6 +28,7 @@ A locked spec at `.scratch/ponytail-omp/spec.md` for pi-ponytail. It is an omp p
 - [Subagent injection](issues/03-subagent-injection.md): subagents fire `before_agent_start` but upstream injects the config-default Level into them; use `ctx.agent.kind/name/parentId`, skip upstream's handler for `sub`, and gate Band/Ledger/map on `kind === "main"`.
 - [Band widget host](issues/04-band-widget-host.md): `omp.btn` clicks reach `handleNativeEvent` (button name `copy` is reserved by Tern, use `copy-md`); `handleInput` never fires; clipboard via `copyToClipboard` from the package root shim.
 - [Map and webhook reuse](issues/05-map-and-webhook-reuse.md): `buildMap` and `webhookRequest` are importable from the package; map is not added by upstream's omp extension, so we add it per prompt from a session-cached string; settings via `getPluginSettings` with our own env/default fallback.
+- [Task and Ledger row](issues/06-task-and-ledger-row.md): a Task starts on session start/switch/branch and on `/clear` (a `reset_boundary` entry), never on compaction or `/tree`; key `taskKey(sessionId, header ts or reset_boundary ts)` so `/resume` continues its row; `project` = basename(git toplevel ?? cwd) as upstream; `model` = `provider/model`; upsert plus webhook at every terminal `agent_end`, main agent only.
 
 ## Not yet specified
 

@@ -17,7 +17,7 @@ The strip above the prompt showing the current Task's cost, tokens, agent time, 
 _Avoid_: bar, footer, status line
 
 **Task**:
-The unit of work the Band measures and the Ledger records as one row.
+The unit of work the Band measures and the Ledger records as one row. It starts with a session, a session switch or branch, or `/clear`, and runs until the next one starts.
 _Avoid_: job, run
 
 **Ledger**:
