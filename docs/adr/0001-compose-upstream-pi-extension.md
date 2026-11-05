@@ -1,0 +1,3 @@
+# Compose upstream's pi extension instead of reimplementing it
+
+Upstream ponytail ships `pi-extension/index.js`, which omp already runs: levels, `/ponytail`, the skill commands, the status badge and injecting the Ruleset. pi-ponytail depends on `@dietrichgebert/ponytail` from npm and calls that extension's default export with `pi`, adding only the Band, the Ledger, the webhook, injecting the Ruleset into subagents and the codebase map. Upstream ruleset and command fixes therefore arrive with a version bump. The cost is coupling to a file outside the package's `exports` map, and `/ponytail` cannot gain subcommands, so the Band toggle lives in `/ponytail-band`.
