@@ -1,0 +1,39 @@
+{
+	"name": "@frapetti-dev/pi-ponytail",
+	"version": "0.1.0",
+	"description": "ponytail for omp",
+	"author": "frapetti-dev (https://github.com/frapetti-dev)",
+	"type": "module",
+	"files": [
+		"extensions",
+		"README.md"
+	],
+	"keywords": ["pi-package", "pi", "pi-extension", "omp"],
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/frapetti-dev/pi-ponytail.git"
+	},
+	"homepage": "https://github.com/frapetti-dev/pi-ponytail#readme",
+	"license": "MIT",
+	"publishConfig": {
+		"registry": "https://npm.pkg.github.com"
+	},
+	"pi": {
+		"extensions": ["./extensions"]
+	},
+	"scripts": {
+		"typecheck": "tsc --noEmit -p tsconfig.json",
+		"test": "bun test --pass-with-no-tests"
+	},
+	"peerDependencies": {
+		"@earendil-works/pi-coding-agent": ">=0.84.0"
+	},
+	"peerDependenciesMeta": {
+		"@earendil-works/pi-coding-agent": { "optional": true }
+	},
+	"devDependencies": {
+		"@earendil-works/pi-coding-agent": "0.84.3",
+		"@types/node": "^26.3.0",
+		"typescript": "^7.0.2"
+	}
+}
