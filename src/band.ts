@@ -1,4 +1,4 @@
-import { col, Memo, type Node, seg, spacer, status } from "./nodes";
+import { col, fit, Memo, type Node, seg, spacer, status } from "./nodes";
 import type { Ctx, Theme, Tui, WidgetComponent } from "./types";
 import { type BandData, metrics } from "./upstream";
 
@@ -7,7 +7,7 @@ export const WIDGET_KEY = "ponytail-band";
 export type BandAction = "level" | "review" | "audit" | "copy-md" | "fold";
 
 const BUTTONS: { act: BandAction; title: string; priority: number }[] = [
-	{ act: "level", title: "Pick the Ponytail level", priority: 100 },
+	{ act: "level", title: "Open the Ponytail panel", priority: 100 },
 	{ act: "review", title: "Run the ponytail review skill", priority: 50 },
 	{ act: "audit", title: "Run the ponytail audit skill", priority: 40 },
 	{ act: "copy-md", title: "Copy the Band as Markdown", priority: 30 },
@@ -72,8 +72,6 @@ const joinItems = (items: [string, string][]) => items.map(([k, v]) => `${k} ${v
 export const metricsLine = (b: BandData) => `ponytail ${b.level} · ${joinItems(metricItems(b))}`;
 
 export const detailLine = (b: BandData) => joinItems(detailItems(b));
-
-const fit = (s: string, width: number) => (s.length > width ? `${s.slice(0, Math.max(1, width - 1))}…` : s);
 
 export interface BandDeps {
 	/** Current Band data; undefined until the first Task starts. */

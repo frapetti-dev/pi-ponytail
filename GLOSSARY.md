@@ -12,6 +12,14 @@ _Avoid_: skill text, instructions
 How hard the Ruleset pushes: off, lite, full (default) or ultra.
 _Avoid_: mode, intensity
 
+**Default Level**:
+The Level a new session starts at until someone switches it.
+_Avoid_: default mode
+
+**Panel**:
+The dialog that shows the current Level and the Default Level and switches either.
+_Avoid_: menu, settings, picker
+
 **Band**:
 The strip above the prompt showing the current Task's cost, tokens, agent time, reuse, tests and actions.
 _Avoid_: bar, footer, status line

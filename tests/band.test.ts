@@ -32,17 +32,18 @@ const idleHost = {
 
 function setup(level: Level = "full") {
 	const ran: string[] = [];
+	let panels = 0;
 	const levels: Level[] = [];
 	const pi = fakePi();
 	const tracker = new TaskTracker(idleHost, () => {});
 	const widget: BandWidget = new BandWidget({ band: () => tracker.current?.band, level: () => level, run: (a) => controller.run(a) });
-	const controller = new BandController(pi, { setLevel: async (l) => void levels.push(l) }, tracker, widget);
+	const controller = new BandController(pi, { setLevel: async (l) => void levels.push(l), openPanel: async () => void panels++ }, tracker, widget);
 	controller.register();
 	const ctx = fakeCtx();
 	controller.attach(ctx);
 	const factory = ctx.widgets.get("ponytail-band") as WidgetFactory | undefined;
 	const comp = factory?.(tui, theme) as WidgetComponent;
-	return { pi, ctx, widget, controller, comp, ran, levels };
+	return { pi, ctx, widget, controller, comp, ran, levels, panels: () => panels };
 }
 
 const walk = (n: Node, out: Node[] = []): Node[] => {
@@ -106,11 +107,14 @@ test("Level off: one dim strip with only the Level button", () => {
 	expect(comp.render(80)).toEqual(["ponytail off"]);
 });
 
-test("the Level button opens the picker and switches through upstream", async () => {
-	const { controller, ctx, levels } = setup();
-	ctx.selectResult = "lite";
+test("the Level button opens the Panel; /ponytail-band level lite switches directly", async () => {
+	const { controller, pi, ctx, levels, panels } = setup();
 	await controller.run("level");
+	expect(panels()).toBe(1);
+	expect(levels).toEqual([]);
+	await run(pi, "level lite", ctx);
 	expect(levels).toEqual(["lite"]);
+	expect(panels()).toBe(1);
 });
 
 test("/ponytail-band off removes the widget and persists bandHidden, keeping other keys", async () => {
