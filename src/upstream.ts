@@ -6,12 +6,13 @@ import type { Ctx, Level, SessionEntryLike } from "./types";
 
 const NAME = "@dietrichgebert/ponytail";
 
-/** Directory of the installed upstream package, found by walking up `node_modules` from this file. `require.resolve` fails under omp's extension loader. */
+/** Directory of the upstream package: committed `vendor/ponytail` (git installs run no `bun install`), else `node_modules`, walking up from this file. `require.resolve` fails under omp's extension loader. */
 export function upstreamRoot(): string {
 	let dir = path.dirname(fileURLToPath(import.meta.url));
 	for (;;) {
-		const pj = path.join(dir, "node_modules", NAME, "package.json");
-		if (fs.existsSync(pj) && JSON.parse(fs.readFileSync(pj, "utf8")).name === NAME) return path.dirname(pj);
+		for (const pj of [path.join(dir, "vendor", "ponytail", "package.json"), path.join(dir, "node_modules", NAME, "package.json")]) {
+			if (fs.existsSync(pj) && JSON.parse(fs.readFileSync(pj, "utf8")).name === NAME) return path.dirname(pj);
+		}
 		const up = path.dirname(dir);
 		if (up === dir) throw new Error(`cannot locate ${NAME}`);
 		dir = up;
