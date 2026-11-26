@@ -67,7 +67,7 @@ export class BandController {
 		const row = this.tracker.snapshot() ?? metrics.snapshot(emptyBand("full"), Date.now());
 		try {
 			// Dynamic by necessity: a host export, absent from the plugin's own dependency graph.
-			const { copyToClipboard } = await import("@oh-my-pi/pi-coding-agent");
+			const { copyToClipboard } = await import("@oh-my-pi/pi-coding-agent/utils/clipboard");
 			await copyToClipboard(metrics.markdown(row));
 		} catch {
 			ctx.ui.notify("Clipboard unavailable", "error");

@@ -1,6 +1,6 @@
 import { PICKABLE } from "./commands";
-import { bar, button, fit, framed, Memo, type Node, text } from "./nodes";
-import type { Ctx, Level, OverlayComponent } from "./types";
+import { bar, button, framed, mount, text } from "./nodes";
+import type { Ctx, Level } from "./types";
 
 export interface PanelDeps {
 	/** Current Level; cheap. */
@@ -18,10 +18,9 @@ const label = (l: string) => l[0].toUpperCase() + l.slice(1);
 /** The Panel: shows the Level and Default Level, switches either, stays open until Esc/q/Close. */
 export function openPanel(ctx: Ctx, deps: PanelDeps): Promise<void> {
 	return ctx.ui.custom<void>(
-		(tui, theme, _kb, done) => {
+		(_ui, _theme, _kb, done) => mount((refresh) => {
 			let def = deps.defaultLevel();
 			let closed = false;
-			const memo = new Memo<Node>();
 
 			// `review` is not a valid default upstream; hide the button when the Level already is the default.
 			const canDefault = () => PICKABLE.includes(deps.level()) && deps.level() !== def;
@@ -39,19 +38,20 @@ export function openPanel(ctx: Ctx, deps: PanelDeps): Promise<void> {
 						.setDefault(deps.level(), ctx)
 						.then(() => {
 							def = deps.defaultLevel();
-							tui.requestRender();
+							refresh();
 						})
 						.catch(fail);
 					return;
 				}
 				const level = PICKABLE.find((l) => `level-${l}` === name);
-				if (level) deps.setLevel(level, ctx).then(() => tui.requestRender()).catch(fail);
+				if (level) deps.setLevel(level, ctx).then(() => refresh()).catch(fail);
 			};
 
-			const build = (): Node => {
+			const build = () => {
 				const level = deps.level();
 				return framed(
 					[
+						text("Ponytail", { role: "omp.sheet.head" }),
 						text(`Level ${level} · Default Level ${def}`, { role: "omp.advisor.note" }),
 						bar(PICKABLE.map((l) => button(label(l), `level-${l}`, KEY_OF[l], l === level ? { tone: "accent" } : undefined)), "levels"),
 						bar([...(canDefault() ? [button(`Make ${level} default`, "default", "d")] : []), null, button("Close", "close", "esc")], "actions"),
@@ -61,30 +61,17 @@ export function openPanel(ctx: Ctx, deps: PanelDeps): Promise<void> {
 			};
 
 			return {
-				nativeOverlay: { role: "omp.overlay.ponytail", head: "Ponytail" },
-				describe: () => memo.get([deps.level(), def], build),
-				handleNativeEvent(ev) {
-					if (ev.type === "action" && typeof ev.act === "string") act(ev.act);
+				describe: build,
+				handleEvent(ev) {
+					if (ev.type === "action") act(ev.act);
 				},
-				handleInput(data) {
-					// shortcut: raw legacy + kitty Escape only (pi-tui's matchesKey is not installed here), switch to matchesKey if other encodings show up.
-					if (data === "\x1b" || data === "\x1b[27u" || data === "q") return finish();
-					const name = KEYS[data];
+				handleKey(key) {
+					if (key.id === "escape" || key.id === "q") return finish();
+					const name = KEYS[key.id];
 					if (name) act(name);
 				},
-				render(width) {
-					const level = deps.level();
-					const rows = [
-						`Ponytail · Level ${level} · Default Level ${def}`,
-						PICKABLE.map((l) => `${KEY_OF[l]} ${l}${l === level ? "*" : ""}`).join("  "),
-						canDefault() ? `d make ${level} default · esc close` : "esc close",
-					];
-					return rows.map((r) => theme.fg("muted", fit(r, width)));
-				},
-				invalidate() {},
-				dispose() {},
 			};
-		},
+		}),
 		{ overlay: true, overlayOptions: { width: "60%" } },
 	);
 }

@@ -1,4 +1,11 @@
-import type { CommandOptions, Ctx, Handler, Level, OverlayComponent, Pi, SessionEntryLike, UsageStats } from "../src/types";
+import type { KeyEvent, UiEvent, UiNode } from "@oh-my-pi/pi-tui";
+import type { CommandOptions, Ctx, Handler, Level, Pi, SessionEntryLike, UsageStats } from "../src/types";
+
+export const host = { requestRender: () => {}, size: () => ({ columns: 120, rows: 40 }), suspend: <R>(run: () => Promise<R>) => run() };
+
+export const k = (id: string, kind = "press") => ({ id, kind, raw: "" }) as KeyEvent;
+
+export const act = (act: string, key = act) => ({ type: "action", key, act, mods: [] }) as UiEvent;
 
 export interface FakePi extends Pi {
 	handlers: Map<string, Handler<never>[]>;
@@ -44,7 +51,7 @@ export interface FakeCtx extends Ctx {
 	widgets: Map<string, unknown>;
 	branch: SessionEntryLike[];
 	stats: UsageStats;
-	overlay?: OverlayComponent;
+	overlay?: UiNode;
 	overlayOptions?: unknown;
 }
 
@@ -66,10 +73,10 @@ export function fakeCtx(opts: Partial<{ kind: "main" | "sub"; id: string; name: 
 			custom: (factory, options) => {
 				const { promise, resolve } = Promise.withResolvers<never>();
 				ctx.overlayOptions = options;
-				ctx.overlay = factory({ requestRender: () => {} }, { fg: (_c, t) => t }, {}, (v) => {
+				ctx.overlay = factory(host, { fg: (_c: string, t: string) => t } as never, {}, (v) => {
 					ctx.overlay = undefined;
 					resolve(v as never);
-				});
+				}) as UiNode;
 				return promise;
 			},
 		},

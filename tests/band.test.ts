@@ -2,23 +2,19 @@ import { beforeEach, expect, test } from "bun:test";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import type { UiNode } from "@oh-my-pi/pi-tui";
 import { BandWidget } from "../src/band";
 import { BandController } from "../src/commands";
-import type { Node } from "../src/nodes";
 import { TaskTracker } from "../src/task";
-import type { Level, Theme, Tui, WidgetComponent, WidgetFactory } from "../src/types";
-import { type FakeCtx, type FakePi, fakeCtx, fakePi } from "./helpers";
+import type { Ctx, Level } from "../src/types";
+import { act, type FakeCtx, type FakePi, fakeCtx, fakePi, host } from "./helpers";
 
-const theme: Theme = { fg: (_c, t) => t };
-let renders = 0;
-const tui: Tui = { requestRender: () => void renders++ };
 let configFile: string;
 
 beforeEach(() => {
 	const dir = fs.mkdtempSync(path.join(os.tmpdir(), "ponytail-band-"));
 	process.env.XDG_CONFIG_HOME = dir;
 	configFile = path.join(dir, "ponytail", "config.json");
-	renders = 0;
 });
 
 const idleHost = {
@@ -41,27 +37,28 @@ function setup(level: Level = "full") {
 	controller.register();
 	const ctx = fakeCtx();
 	controller.attach(ctx);
-	const factory = ctx.widgets.get("ponytail-band") as WidgetFactory | undefined;
-	const comp = factory?.(tui, theme) as WidgetComponent;
+	const factory = ctx.widgets.get("ponytail-band") as Parameters<Ctx["ui"]["setWidget"]>[1];
+	const comp = factory?.(host, { fg: (_c: string, t: string) => t } as never) as UiNode;
 	return { pi, ctx, widget, controller, comp, ran, levels, panels: () => panels };
 }
 
-const walk = (n: Node, out: Node[] = []): Node[] => {
+const walk = (n: UiNode, out: UiNode[] = []): UiNode[] => {
 	out.push(n);
-	for (const c of n.c ?? []) walk(c, out);
+	for (const c of n.children()) walk(c, out);
 	return out;
 };
-const describe = (c: WidgetComponent) => c.describe?.({ cols: 120, dark: true }) as Node;
-const keys = (n: Node) => walk(n).flatMap((x) => (x.key ? [x.key] : []));
-const texts = (n: Node) => walk(n).flatMap((x) => (typeof x.p?.text === "string" ? [x.p.text] : []));
-const action = (c: WidgetComponent, act: string) => c.handleNativeEvent?.({ type: "action", key: `actions/${act}` });
+const describe = (c: UiNode) => c.children()[0]!;
+const keys = (n: UiNode) => walk(n).flatMap((x) => (x.key() ? [x.key()!] : []));
+const action = (c: UiNode, a: string) => c.handlers.onEvent?.(act(a, `actions/${a}`));
+const props = (n: UiNode) => n.props() as { spans?: unknown; text?: string; tone?: string };
+const spans = (n: UiNode) => walk(n).flatMap((x) => (props(x).spans ? [JSON.stringify(props(x).spans)] : []));
 const run = (pi: FakePi, args: string, ctx: FakeCtx) => pi.commands.get("ponytail-band")?.handler(args, ctx);
 
 test("compact Band shows zeros before the first turn and the five buttons", () => {
 	const { comp } = setup();
 	const tree = describe(comp);
 	expect(keys(tree).filter((k) => !k.startsWith("m."))).toEqual(["level", "review", "audit", "copy-md", "fold"]);
-	expect(walk(tree).filter((n) => n.key?.startsWith("m.")).map((n) => JSON.stringify(n.p?.spans))).toEqual([
+	expect(walk(tree).filter((n) => n.key()?.startsWith("m.")).map((n) => JSON.stringify(props(n).spans))).toEqual([
 		'[{"t":"cost ","s":"dim"},{"t":"$0.00","s":"strong"}]',
 		'[{"t":"tokens ","s":"dim"},{"t":"0","s":"strong"}]',
 		'[{"t":"turns ","s":"dim"},{"t":"0","s":"strong"}]',
@@ -69,42 +66,28 @@ test("compact Band shows zeros before the first turn and the five buttons", () =
 		'[{"t":"reuse ","s":"dim"},{"t":"–","s":"strong"}]',
 		'[{"t":"tests ","s":"dim"},{"t":"not run","s":"strong"}]',
 	]);
-	expect(JSON.stringify(tree)).toContain('"Level: full"');
+	expect(spans(tree)).toContain('[{"t":"Level: full"}]');
 });
 
-test("fold toggles the detail line and the button label; memo is stable until refresh", () => {
+test("fold toggles the detail line and the button label; refresh rebuilds", () => {
 	const { comp, widget } = setup();
 	const a = describe(comp);
-	expect(describe(comp)).toBe(a);
+	expect(spans(a).join()).not.toContain("last turn");
 	action(comp, "fold");
 	const b = describe(comp);
 	expect(b).not.toBe(a);
 	expect(widget.detail).toBe(true);
-	expect(JSON.stringify(b)).toContain('"t":"last turn ","s":"dim"},{"t":"–"');
-	expect(JSON.stringify(b)).toContain('"Compact"');
+	expect(spans(b)).toContain('[{"t":"last turn ","s":"dim"},{"t":"–","s":"strong"}]');
+	expect(spans(b)).toContain('[{"t":"Compact"}]');
 	widget.refresh();
 	expect(describe(comp)).not.toBe(b);
-	expect(renders).toBeGreaterThan(0);
-});
-
-test("ANSI lines never exceed the width and end with an ellipsis when cut", () => {
-	const { comp } = setup();
-	action(comp, "fold");
-	for (const line of comp.render(40)) {
-		expect(line.length).toBeLessThanOrEqual(40);
-	}
-	const first = comp.render(20)[0] ?? "";
-	expect(first).toHaveLength(20);
-	expect(first.endsWith("…")).toBe(true);
-	expect(comp.render(200)[0]?.endsWith("…")).toBe(false);
 });
 
 test("Level off: one dim strip with only the Level button", () => {
 	const { comp } = setup("off");
 	const tree = describe(comp);
 	expect(keys(tree)).toEqual(["off", "level"]);
-	expect(JSON.stringify(tree)).toContain('"ponytail off"');
-	expect(comp.render(80)).toEqual(["ponytail off"]);
+	expect(spans(tree)).toContain('[{"t":"ponytail off","s":"dim"}]');
 });
 
 test("the Level button opens the Panel; /ponytail-band level lite switches directly", async () => {

@@ -1,29 +1,46 @@
-/** Plain-object Tern node builders; same shapes omp's own builders produce, without importing host code. */
+/** pi-tui node builders and `mount`, the bridge to `ctx.ui.custom`. Value imports from the @oh-my-pi/pi-tui root only. */
+import { type JSXNode, jsx, type KeyEvent, signal, type UiEvent } from "@oh-my-pi/pi-tui";
+import type { TspKind, TspProps, TspSpan } from "@oh-my-pi/pi-wire";
 
-export interface Node {
-	k: string;
-	p?: Record<string, unknown>;
-	c?: Node[];
-	key?: string;
+/** A focused view: its tree plus its input handlers. */
+export interface View {
+	describe(): JSXNode;
+	handleKey(key: KeyEvent): void;
+	handleEvent?(e: UiEvent): void;
 }
 
-export const node = (k: string, p?: Record<string, unknown>, c?: Node[], key?: string): Node => ({ k, p, c, key });
+/** Root node for ctx.ui.custom: rebuilds `describe()` whenever `refresh` runs; routes keys and events to the view. */
+export function mount(build: (refresh: () => void) => View): JSXNode {
+	const tick = signal(0);
+	const view = build(() => tick.update((v) => v + 1));
+	return jsx("col", {
+		children: () => {
+			tick();
+			return view.describe();
+		},
+		onKey: (key: KeyEvent) => {
+			if (key.kind === "release") return false;
+			view.handleKey(key);
+			return true;
+		},
+		onEvent: (e: UiEvent) => view.handleEvent?.(e),
+	});
+}
 
-export const text = (s: string, p?: Record<string, unknown>): Node => node("text", { ...p, text: s });
+export const node = <K extends TspKind>(k: K, p?: TspProps<K>, c?: readonly JSXNode[], key?: string): JSXNode =>
+	jsx(k, c === undefined ? { ...p } : { ...p, children: c }, key) as JSXNode;
 
-export const row = (c: Node[], p?: Record<string, unknown>): Node => node("row", p, c);
+export const text = (s: string, p?: TspProps<"text">): JSXNode => node("text", { ...p, text: s });
 
-export const col = (c: Node[], p?: Record<string, unknown>): Node => node("col", p, c);
+export const col = (c: readonly JSXNode[], p?: TspProps<"col">): JSXNode => node("col", p, c);
 
-/** Tern `status` strip: sans face, segments drop by priority instead of overflowing or wrapping. */
-export const status = (c: Node[]): Node => node("status", { transparent: true }, c);
+/** `status` strip: sans face, segments drop by priority instead of overflowing or wrapping. */
+export const status = (c: readonly JSXNode[]): JSXNode => node("status", { transparent: true }, c);
 
-export const spacer = (size: "xs" | "sm" | "md" | "lg"): Node => node("spacer", { size });
+export const spacer = (size: "xs" | "sm" | "md" | "lg"): JSXNode => node("spacer", { size });
 
-export const fit = (s: string, width: number) => (s.length > width ? `${s.slice(0, Math.max(1, width - 1))}…` : s);
-
-/** TSP has no padding prop: spacers and an inset row frame the content instead. */
-export function framed(kids: Node[], gap: "sm" | "md" | "lg"): Node {
+/** No padding prop: spacers and an inset row frame the content instead. */
+export function framed(kids: readonly JSXNode[], gap: "sm" | "md" | "lg"): JSXNode {
 	const side = (key: string) => node("spacer", { min: { w: "2ch" } }, undefined, key);
 	const inset = node("row", { align: "start" }, [side("left"), node("col", { gap, grow: 1 }, kids, "content"), side("right")], "inset");
 	return node(
@@ -34,7 +51,7 @@ export function framed(kids: Node[], gap: "sm" | "md" | "lg"): Node {
 	);
 }
 
-export function button(label: string, act: string, keys?: string, p?: Record<string, unknown>): Node {
+export function button(label: string, act: string, keys?: string, p?: TspProps<"row">): JSXNode {
 	return node(
 		"row",
 		{ role: "omp.btn", gap: "xs", align: "center", actions: { click: act }, title: label, ...p },
@@ -44,25 +61,10 @@ export function button(label: string, act: string, keys?: string, p?: Record<str
 }
 
 /** Action row; a null item becomes a flexible spacer that pushes the rest to the right. */
-export function bar(items: (Node | null)[], key: string): Node {
+export function bar(items: readonly (JSXNode | null)[], key: string): JSXNode {
 	return node("row", { role: "omp.actions", gap: "sm", align: "center" }, items.map((b) => b ?? node("spacer", { grow: 1 })), key);
 }
 
 /** Status segment; `act` makes it a button and doubles as the key so the event key ends in it. */
-export const seg = (key: string, spans: unknown[], p?: Record<string, unknown>, act?: string): Node =>
+export const seg = (key: string, spans: readonly TspSpan[], p?: TspProps<"seg">, act?: string): JSXNode =>
 	node("seg", { spans, ...p, ...(act ? { actions: { click: act } } : {}) }, undefined, key);
-
-/** Rebuilds only when a dependency changes (Object.is), so describe() returns a stable node between renders. */
-export class Memo<T> {
-	#deps: readonly unknown[] | undefined;
-	#value: T | undefined;
-
-	get(deps: readonly unknown[], build: () => T): T {
-		if (this.#deps && this.#value !== undefined && deps.length === this.#deps.length && deps.every((d, i) => Object.is(d, this.#deps?.[i]))) {
-			return this.#value;
-		}
-		this.#value = build();
-		this.#deps = deps;
-		return this.#value;
-	}
-}

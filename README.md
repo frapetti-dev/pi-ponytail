@@ -1,8 +1,8 @@
 # pi-ponytail
 
-[ponytail](https://github.com/DietrichGebert/ponytail) for [omp](https://github.com/can1357/oh-my-pi). It runs upstream's pi extension unchanged (the Ruleset, `/ponytail`, the status badge) and adds:
+[ponytail](https://github.com/DietrichGebert/ponytail) for [omp](https://github.com/can1357/oh-my-pi) 19.2.1 or newer (omp only; upstream Pi is no longer supported). It runs upstream's pi extension unchanged (the Ruleset, `/ponytail`, the status badge) and adds:
 
-- **Band**: a one-line live readout above the editor (cost, tokens, turns, time, reuse, tests) with buttons for Level, Review, Audit, Copy and Details. Native (Tern) and ANSI terminals.
+- **Band**: a one-line live readout above the editor (cost, tokens, turns, time, reuse, tests) with buttons for Level, Review, Audit, Copy and Details. 
 - **Ledger**: one CSV row per Task, rewritten every turn, same file and columns as the Claude Code ponytail band.
 - **Webhook**: the same row, POSTed after every turn.
 - **Ruleset for subagents**: `task`/`eval` subagents get the Ruleset at the parent's Level.
