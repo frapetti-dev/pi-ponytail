@@ -1,10 +1,10 @@
 import { beforeEach, expect, test } from "bun:test";
+import type { UiNode } from "@oh-my-pi/pi-tui";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import ponytail from "../extensions/index";
-import type { Node } from "../src/nodes";
-import { type FakeCtx, type FakePi, fakeCtx, fakePi } from "./helpers";
+import { act, type FakeCtx, type FakePi, fakeCtx, fakePi, k } from "./helpers";
 
 let configFile: string;
 
@@ -15,18 +15,20 @@ beforeEach(() => {
 	configFile = path.join(dir, "ponytail", "config.json");
 });
 
-const walk = (n: Node, out: Node[] = []): Node[] => {
+const walk = (n: UiNode, out: UiNode[] = []): UiNode[] => {
 	out.push(n);
-	for (const c of n.c ?? []) walk(c, out);
+	for (const c of n.children()) walk(c, out);
 	return out;
 };
-const tree = (ctx: FakeCtx) => ctx.overlay?.describe?.({ cols: 120, dark: true }) as Node;
+const props = (n: UiNode) => n.props() as { text?: string; tone?: string };
+const tree = (ctx: FakeCtx) => ctx.overlay!.children()[0]!;
+const key = (ctx: FakeCtx, id: string) => ctx.overlay!.handlers.onKey!(k(id));
 // The panel fires async actions without returning them; drain the microtask queue so their effects land.
 const flush = async () => {
 	for (let i = 0; i < 10; i++) await Promise.resolve();
 };
-const find = (ctx: FakeCtx, key: string) => walk(tree(ctx)).find((n) => n.key === key);
-const texts = (ctx: FakeCtx) => walk(tree(ctx)).flatMap((n) => (typeof n.p?.text === "string" ? [n.p.text] : []));
+const find = (ctx: FakeCtx, key: string) => walk(tree(ctx)).find((n) => n.key() === key);
+const texts = (ctx: FakeCtx) => walk(tree(ctx)).flatMap((n) => (typeof props(n).text === "string" ? [props(n).text as string] : []));
 const lastMode = (pi: FakePi) => (pi.entries.at(-1)?.data as { mode: string } | undefined)?.mode;
 const open = (pi: FakePi, ctx: FakeCtx) => {
 	ponytail(pi);
@@ -40,18 +42,18 @@ test("bare /ponytail opens the Panel; click and key both switch the Level; Esc c
 	expect(ctx.overlay).toBeDefined();
 	expect(ctx.overlayOptions).toEqual({ overlay: true, overlayOptions: { width: "60%" } });
 	expect(pi.entries).toEqual([]);
-	expect(tree(ctx)).toBe(tree(ctx));
+	expect(texts(ctx)).toContain("Ponytail");
 
-	ctx.overlay!.handleNativeEvent?.({ type: "action", key: "frame/inset/content/levels/level-ultra", act: "level-ultra" });
+	ctx.overlay!.handlers.onEvent!(act("level-ultra", "frame/inset/content/levels/level-ultra"));
 	await flush();
 	expect(pi.entries.at(-1)).toEqual({ type: "ponytail-mode", data: { mode: "ultra" } });
-	expect(find(ctx, "level-ultra")?.p?.tone).toBe("accent");
+	expect(props(find(ctx, "level-ultra")!).tone).toBe("accent");
 
-	ctx.overlay!.handleInput?.("l");
+	key(ctx, "l");
 	await flush();
 	expect(lastMode(pi)).toBe("lite");
 
-	ctx.overlay!.handleInput?.("\x1b");
+	key(ctx, "escape");
 	await opened;
 	expect(ctx.overlay).toBeUndefined();
 });
@@ -60,17 +62,17 @@ test("Make default writes config.json and then hides itself", async () => {
 	const pi = fakePi();
 	const ctx = fakeCtx();
 	const opened = open(pi, ctx);
-	ctx.overlay!.handleInput?.("u");
+	key(ctx, "u");
 	await flush();
 	expect(find(ctx, "default")).toBeDefined();
 
-	ctx.overlay!.handleInput?.("d");
+	key(ctx, "d");
 	await flush();
 	expect(JSON.parse(fs.readFileSync(configFile, "utf8")).defaultMode).toBe("ultra");
 	expect(find(ctx, "default")).toBeUndefined();
 	expect(texts(ctx).some((t) => t.includes("Default Level ultra"))).toBe(true);
 
-	ctx.overlay!.handleInput?.("q");
+	key(ctx, "q");
 	await opened;
 });
 

@@ -1,5 +1,6 @@
-import { col, fit, Memo, type Node, seg, spacer, status } from "./nodes";
-import type { Ctx, Theme, Tui, WidgetComponent } from "./types";
+import { type JSXNode, jsx, signal, type UiEvent } from "@oh-my-pi/pi-tui";
+import { col, seg, spacer, status } from "./nodes";
+import type { Ctx } from "./types";
 import { type BandData, metrics } from "./upstream";
 
 export const WIDGET_KEY = "ponytail-band";
@@ -67,12 +68,6 @@ export function detailItems(b: BandData): [string, string][] {
 	];
 }
 
-const joinItems = (items: [string, string][]) => items.map(([k, v]) => `${k} ${v}`).join(" · ");
-
-export const metricsLine = (b: BandData) => `ponytail ${b.level} · ${joinItems(metricItems(b))}`;
-
-export const detailLine = (b: BandData) => joinItems(detailItems(b));
-
 export interface BandDeps {
 	/** Current Band data; undefined until the first Task starts. */
 	band(): BandData | undefined;
@@ -82,13 +77,10 @@ export interface BandDeps {
 	run(act: Exclude<BandAction, "fold">): void;
 }
 
-/** The Band above the editor: one component serving both Tern (describe) and ANSI (render). */
+/** The Band above the editor: a reactive node that rebuilds when `refresh` bumps its tick. */
 export class BandWidget {
 	#detail = false;
-	#version = 0;
-	#installed = false;
-	#tui: Tui | undefined;
-	#memo = new Memo<Node>();
+	#tick = signal(0);
 
 	constructor(private readonly deps: BandDeps) {}
 
@@ -96,24 +88,17 @@ export class BandWidget {
 		return this.#detail;
 	}
 
-	get installed(): boolean {
-		return this.#installed;
-	}
-
 	install(ctx: Ctx): void {
-		if (this.#installed || !ctx.hasUI) return;
-		this.#installed = true;
-		ctx.ui.setWidget(WIDGET_KEY, (tui, theme) => this.#component(tui, theme), { placement: "aboveEditor" });
+		if (!ctx.hasUI) return;
+		ctx.ui.setWidget(WIDGET_KEY, () => this.#node(), { placement: "aboveEditor" });
 	}
 
 	remove(ctx: Ctx): void {
-		this.#installed = false;
 		if (ctx.hasUI) ctx.ui.setWidget(WIDGET_KEY, undefined);
 	}
 
 	refresh(): void {
-		this.#version++;
-		this.#tui?.requestRender();
+		this.#tick.update((v) => v + 1);
 	}
 
 	toggleFold(): void {
@@ -125,53 +110,34 @@ export class BandWidget {
 		return this.deps.band() ?? emptyBand(this.deps.level());
 	}
 
-	#describe(cols: number, dark: boolean): Node {
-		return this.#memo.get([this.#version, dark, cols], () => {
-			const b = this.#view();
-			const label = (act: BandAction) =>
-				act === "level" ? `Level: ${b.level}` : act === "fold" ? (this.#detail ? "Compact" : "Details") : act === "copy-md" ? "Copy" : act === "review" ? "Review" : "Audit";
-			const buttons = (b.level === "off" ? BUTTONS.slice(0, 1) : BUTTONS).map((x) =>
-				seg(x.act, [label(x.act)], { side: "right", priority: x.priority, title: x.title }, x.act),
-			);
-			// Segments label dim, value strong; earlier items outrank later ones when the strip is too narrow.
-			const items = (id: string, list: [string, string][]) =>
-				list.map(([k, v], i) => seg(`${id}.${k}`, [{ t: `${k} `, s: "dim" }, { t: v, s: "strong" }], { priority: list.length - i }));
-			const off = [seg("off", [{ t: "ponytail off", s: "dim" }])];
-			const rows = [status([...(b.level === "off" ? off : items("m", metricItems(b))), ...buttons])];
-			if (this.#detail && b.level !== "off") rows.push(status(items("d", detailItems(b))));
-			// The composer's context meter is drawn over the bottom edge of the widget; leave room for it.
-			return col([...rows, spacer("md")]);
+	#node(): JSXNode {
+		return jsx("col", {
+			children: () => {
+				this.#tick();
+				return this.#describe();
+			},
+			onEvent: (ev: UiEvent) => {
+				if (ev.type !== "action") return;
+				if (ev.act === "fold") this.toggleFold();
+				else if (ev.act === "level" || ev.act === "review" || ev.act === "audit" || ev.act === "copy-md") this.deps.run(ev.act);
+			},
 		});
 	}
 
-	#lines(): { lines: string[]; dim: boolean } {
+	#describe(): JSXNode {
 		const b = this.#view();
-		if (b.level === "off") return { lines: ["ponytail off"], dim: true };
-		const lines = [metricsLine(b)];
-		if (this.#detail) lines.push(detailLine(b), "/ponytail-band level|review|audit|copy|fold");
-		return { lines, dim: false };
-	}
-
-	#component(tui: Tui, theme: Theme): WidgetComponent {
-		this.#tui = tui;
-		return {
-			render: (width) => {
-				const { lines, dim } = this.#lines();
-				// Truncate the plain text first: styling adds escape codes that must not count toward the width.
-				return lines.map((l, i) => theme.fg(dim || i === 2 ? "dim" : "muted", fit(l, width)));
-			},
-			describe: (cx) => this.#describe(cx.cols, cx.dark),
-			handleNativeEvent: (ev) => {
-				if (ev.type !== "action" || typeof ev.key !== "string") return;
-				const act = ev.key.slice(ev.key.lastIndexOf("/") + 1);
-				if (act === "fold") this.toggleFold();
-				else if (act === "level" || act === "review" || act === "audit" || act === "copy-md") this.deps.run(act);
-			},
-			invalidate: () => {},
-			dispose: () => {
-				this.#tui = undefined;
-				this.#installed = false;
-			},
-		};
+		const label = (act: BandAction) =>
+			act === "level" ? `Level: ${b.level}` : act === "fold" ? (this.#detail ? "Compact" : "Details") : act === "copy-md" ? "Copy" : act === "review" ? "Review" : "Audit";
+		const buttons = (b.level === "off" ? BUTTONS.slice(0, 1) : BUTTONS).map((x) =>
+			seg(x.act, [{ t: label(x.act) }], { side: "right", priority: x.priority, title: x.title }, x.act),
+		);
+		// Segments label dim, value strong; earlier items outrank later ones when the strip is too narrow.
+		const items = (id: string, list: [string, string][]) =>
+			list.map(([k, v], i) => seg(`${id}.${k}`, [{ t: `${k} `, s: "dim" }, { t: v, s: "strong" }], { priority: list.length - i }));
+		const off = [seg("off", [{ t: "ponytail off", s: "dim" }])];
+		const rows = [status([...(b.level === "off" ? off : items("m", metricItems(b))), ...buttons])];
+		if (this.#detail && b.level !== "off") rows.push(status(items("d", detailItems(b))));
+		// The composer's context meter is drawn over the bottom edge of the widget; leave room for it.
+		return col([...rows, spacer("md")]);
 	}
 }

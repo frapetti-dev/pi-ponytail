@@ -1,3 +1,6 @@
+import type { ExtensionTheme, ExtensionUiHost } from "@oh-my-pi/pi-coding-agent";
+import type { JSXNode } from "@oh-my-pi/pi-tui";
+
 /** Minimal structural view of the omp extension host; only members this plugin touches. */
 
 export type Level = "off" | "lite" | "full" | "ultra" | "review";
@@ -17,29 +20,6 @@ export interface SessionEntryLike {
 	[key: string]: unknown;
 }
 
-export interface Theme {
-	fg(color: string, text: string): string;
-}
-
-export interface Tui {
-	requestRender(): void;
-}
-
-export interface WidgetComponent {
-	render(width: number): string[];
-	invalidate(): void;
-	dispose?(): void;
-	describe?(cx: { dark: boolean; cols: number }): unknown;
-	handleNativeEvent?(ev: { type: string; key?: string; [k: string]: unknown }): void;
-}
-
-export interface OverlayComponent extends WidgetComponent {
-	nativeOverlay?: { role?: string; head?: string };
-	handleInput?(data: string): void;
-}
-
-export type WidgetFactory = (tui: Tui, theme: Theme) => WidgetComponent;
-
 export interface AgentIdentity {
 	kind: "main" | "sub";
 	id: string;
@@ -56,12 +36,11 @@ export interface Ctx {
 	ui: {
 		notify(message: string, type?: "info" | "warning" | "error"): void;
 		setStatus(key: string, text: string | undefined): void;
-		setWidget(key: string, content: WidgetFactory | string[] | undefined, options?: { placement?: string }): void;
+		setWidget(key: string, content: ((ui: ExtensionUiHost, theme: ExtensionTheme) => JSXNode) | undefined, options?: { placement?: string }): void;
 		custom<T>(
-			factory: (tui: Tui, theme: Theme, keybindings: unknown, done: (result: T) => void) => OverlayComponent,
+			factory: (ui: ExtensionUiHost, theme: ExtensionTheme, keybindings: unknown, done: (result: T) => void) => JSXNode,
 			options?: { overlay?: boolean; overlayOptions?: { width?: string } },
 		): Promise<T>;
-		theme?: Theme;
 	};
 	isIdle(): boolean;
 	sessionManager: {
